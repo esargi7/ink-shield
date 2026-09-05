@@ -21,13 +21,7 @@ const TYDRO_DATA_PROVIDER_ABI = parseAbi([
 const inkClient = createPublicClient({
   transport: http("https://rpc-gel.inkonchain.com"),
 });
-const walletClient =
-  typeof window !== "undefined" && window.ethereum
-    ? createWalletClient({
-      chain: ink,
-        transport: custom(window.ethereum),
-      })
-    : undefined;
+
 
     
 export default function Home() {
@@ -104,7 +98,7 @@ const nadoClient = createNadoClient(
   subaccountOwner: accounts[0],
   subaccountName: "default",
 });  
-console.log("NADO SUMMARY:", nadoSummary);
+
 const nadoRawBalance = nadoSummary.balances.find(
   (balance: any) => balance.productId === 0
 )?.amount;
@@ -170,7 +164,7 @@ while (true) {
 }
 
 setNfts(allNfts);
-console.log("ALL NFTS:", allNfts);
+
 const nftPricesResponse = await fetch("/api/nft-prices");
 const nftPricesData = await nftPricesResponse.json();
 setNftPrices(nftPricesData.collections || []);
@@ -248,11 +242,7 @@ const nadoClient = createNadoClient(
   { publicClient: inkClient, walletClient: connectedWalletClient }
 );
 
-console.log("NADO HEDGE PREVIEW:", {
-  side: "LONG",
-  usdSize: suggestedHedge,
-  wallet: walletAddress,
-});
+
 setShowHedgePreview(true);
 };
 
