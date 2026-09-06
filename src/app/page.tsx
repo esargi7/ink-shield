@@ -80,10 +80,14 @@ const totalNftValueEth = nfts.reduce(
   (total: number, nft: any) => total + getNftFloorPrice(nft),
   0
 );
+const totalTokensUsd =
+  Number(totalTokenValue || 0) + Number(ethBalance || 0) * ethUsdPrice;
+
 const totalTokenValueEth =
-  ethUsdPrice > 0 ? Number(totalTokenValue || 0) / ethUsdPrice : 0;
- const totalPortfolioValueEth =
-  Number(ethBalance || 0) + totalNftValueEth + totalTokenValueEth;
+  ethUsdPrice > 0 ? totalTokensUsd / ethUsdPrice : Number(ethBalance || 0);
+
+const totalPortfolioValueEth =
+  totalNftValueEth + totalTokenValueEth;
   
   const [tydroCollateral, setTydroCollateral] = useState("");
 const [tydroDebt, setTydroDebt] = useState("");
