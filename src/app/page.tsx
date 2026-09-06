@@ -566,7 +566,7 @@ const bValue = getNftFloorPrice(b);
     <p className="text-white font-semibold">✓ Hedge prepared</p>
     <p className="text-white">BTC LONG · ${suggestedHedge || "0.00"}</p>
     <p className="text-gray-400 text-sm">Ready for Nado execution</p>
-   <button onClick={() => window.open("https://app.nado.xyz/perpetuals?join=inkboard", "_blank")} className="mt-3 px-4 py-2 bg-white text-black rounded-lg font-semibold">
+  <button onClick={() => window.open("https://app.nado.xyz/perpetuals?join=inkboard", "_blank", "noopener,noreferrer")} className="mt-3 px-4 py-2 bg-white text-black rounded-lg font-semibold">
   Execute on Nado
 </button>
   </div>
