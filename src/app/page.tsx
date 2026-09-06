@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { createPublicClient, createWalletClient, custom, http, parseAbi } from "viem";
+import { createPublicClient, http, parseAbi } from "viem";
 import { createNadoClient } from "@nadohq/client";
 import { ink } from "viem/chains";
 declare global {
@@ -27,6 +27,7 @@ const inkClient = createPublicClient({
 export default function Home() {
 
   const [walletAddress, setWalletAddress] = useState("");
+  const [watchAddress, setWatchAddress] = useState("");
   const [chainId, setChainId] = useState("");
   const [ethBalance, setEthBalance] = useState("");
   const [ethUsdPrice, setEthUsdPrice] = useState(0);
@@ -34,8 +35,27 @@ export default function Home() {
   const [totalTokenValue, setTotalTokenValue] = useState("0.00");
   const [nfts, setNfts] = useState<any[]>([]);
   const [nftPrices, setNftPrices] = useState<any[]>([]);
+  const [nftCollectionNames, setNftCollectionNames] =
+  useState<Record<string, { name: string; topOffer: number }>>({});
   const getNftFloorPrice = (nft: any) => {
+    
+  const getNftCollectionName = (nft: any) => {
   const nftAddress = (
+    nft.token?.address ||
+    nft.token?.address_hash ||
+    nft.address ||
+    ""
+  ).toLowerCase();
+
+  const collection = nftPrices.find((item: any) =>
+    item.contracts?.some(
+      (contract: any) =>
+        contract.address?.toLowerCase() === nftAddress
+    )
+  );
+
+  return collection?.name || nft.name || nft.metadata?.name || "Unnamed NFT";
+};const nftAddress = (
     nft.token?.address ||
     nft.token?.address_hash ||
     nft.address ||
@@ -50,7 +70,11 @@ export default function Home() {
     )
   );
 
-return Number(collection?.stats?.total?.floor_price || 0);
+
+return nftCollectionNames[nft.id]?.topOffer || Number(collection?.stats?.total?.floor_price || 0);
+};
+const getNftCollectionName = (nft: any) => {
+return nftCollectionNames[nft.id]?.name || nft.name || nft.metadata?.name || "Unnamed NFT";
 };
 const totalNftValueEth = nfts.reduce(
   (total: number, nft: any) => total + getNftFloorPrice(nft),
@@ -74,7 +98,99 @@ const [hedgeRecommendation, setHedgeRecommendation] = useState("");
 const [suggestedHedge, setSuggestedHedge] = useState("");
 const [showHedgePreview, setShowHedgePreview] = useState(false);
 const [hedgePrepared, setHedgePrepared] = useState(false);
+const viewWallet = async () => {
+  if (!watchAddress.startsWith("0x") || watchAddress.length !== 42) {
+    alert("Enter a valid wallet address.");
+    return;
+  }setWalletAddress(watchAddress);
+  const address = watchAddress as `0x${string}`;
+  const balanceWei = await inkClient.getBalance({
+  address,
+});
+
+const balanceEth = Number(balanceWei) / 1e18;
+setEthBalance(balanceEth.toFixed(6));
+const readOnlyEthPriceResponse = await fetch(
+  "https://api.coinbase.com/v2/prices/ETH-USD/spot"
+);
+
+const readOnlyEthPriceData = await readOnlyEthPriceResponse.json();
+const readOnlyEthPrice = Number(readOnlyEthPriceData.data.amount);
+
+setEthUsdPrice(readOnlyEthPrice);
+const tokenResponse = await fetch(
+  `https://explorer.inkonchain.com/api/v2/addresses/${address}/token-balances`
+);
+
+const tokenData = await tokenResponse.json();
+setTokens(tokenData);
+const tokenTotal = tokenData.reduce((total: number, token: any) => {
+  const amount =
+    Number(token.value) / 10 ** Number(token.token?.decimals || 18);
+  const price = Number(token.token?.exchange_rate || 0);
+
+  return total + amount * price;
+}, 0);
+
+setTotalTokenValue(tokenTotal.toFixed(2));
+let readOnlyNfts: any[] = [];
+let readOnlyNextPageParams = "";
+
+while (true) {
+  const readOnlyNftUrl =
+    `https://explorer.inkonchain.com/api/v2/addresses/${address}/nft` +
+    (readOnlyNextPageParams ? `?${readOnlyNextPageParams}` : "");
+
+  const nftResponse = await fetch(readOnlyNftUrl);
+  const nftData = await nftResponse.json();
+
+  readOnlyNfts = [...readOnlyNfts, ...(nftData.items || [])];
+
+  if (!nftData.next_page_params) break;
+
+  readOnlyNextPageParams = new URLSearchParams(
+    nftData.next_page_params
+  ).toString();
+}
+
+setNfts(readOnlyNfts);
+const collectionNameEntries = await Promise.all(
+ readOnlyNfts.map(async (nft: any) => {
+    const contract =
+      nft.token?.address ||
+      nft.token?.address_hash ||
+      nft.address ||
+      "";
+
+    if (!contract || !nft.id) {
+      return [nft.id, ""] as const;
+    }
+
+    const response = await fetch(
+      `/api/nft-prices?contract=${contract}&tokenId=${nft.id}`
+    );
+
+    const data = await response.json();
+    console.log("OPENSEA NFT COLLECTION:", nft.id, data);
+
+  return [
+  nft.id,
+  {
+    name: data.name || "",
+topOffer: Number(data.offer?.price?.value || 0) / 1e18,
+  },
+] as const;
+  })
+);
+
+setNftCollectionNames(Object.fromEntries(collectionNameEntries));
+
+const nftPriceResponse = await fetch("/api/nft-prices");
+const nftPriceData = await nftPriceResponse.json();
+setNftPrices(nftPriceData.collections || []);
+};
 const connectWallet = async () => {
+
   if (!window.ethereum) {
     alert("Please install a crypto wallet extension.");
     return;
@@ -84,14 +200,9 @@ const connectWallet = async () => {
     const accounts = await window.ethereum.request({
       method: "eth_requestAccounts",
     });
-    const connectedWalletClient = createWalletClient({
- chain: ink,
-      account: accounts[0] as `0x${string}`,
-  transport: custom(window.ethereum),
-});
-const nadoClient = createNadoClient(
+  const nadoClient = createNadoClient(
   { chainEnv: "inkMainnet" },
-  { publicClient: inkClient, walletClient: connectedWalletClient }
+  { publicClient: inkClient }
 );
 
  const nadoSummary = await nadoClient.subaccount.getSubaccountSummary({
@@ -128,6 +239,7 @@ const balanceWei = await inkClient.getBalance({
 });
 const balanceEth = Number(balanceWei) / 1e18;
 setEthBalance(balanceEth.toFixed(6));
+
 const tokenResponse = await fetch(
   `https://explorer.inkonchain.com/api/v2/addresses/${accounts[0]}/token-balances`
 );
@@ -164,6 +276,7 @@ while (true) {
 }
 
 setNfts(allNfts);
+console.log("FIRST NFT FULL DATA:", allNfts[0]);
 
 const nftPricesResponse = await fetch("/api/nft-prices");
 const nftPricesData = await nftPricesResponse.json();
@@ -228,22 +341,13 @@ setHedgeRecommendation("Open strong BTC LONG on Nado / Repay debt urgently");
   }
 };
 
-const openNadoHedge = async () => {if (!window.ethereum || !walletAddress) {
-  alert("Connect wallet first");
-  return;
-}
-const connectedWalletClient = createWalletClient({
-  chain: ink,
-  account: walletAddress as `0x${string}`,
-  transport: custom(window.ethereum),
-});
-const nadoClient = createNadoClient(
-  { chainEnv: "inkMainnet" },
-  { publicClient: inkClient, walletClient: connectedWalletClient }
-);
+const openNadoHedge = () => {
+  if (!walletAddress) {
+    alert("Connect wallet first");
+    return;
+  }
 
-
-setShowHedgePreview(true);
+  setShowHedgePreview(true);
 };
 
   return (
@@ -276,6 +380,23 @@ setShowHedgePreview(true);
           >
             {walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : "Connect Wallet"}
           </button>
+          <p className="mt-2 text-xs text-green-400">
+  Read-only connection — Inkboard will never request signatures, token approvals or transactions.
+</p>
+          <div className="mt-4">
+  <input
+    type="text"
+    placeholder="Enter wallet address (0x...)"
+    value={watchAddress}
+    onChange={(e) => setWatchAddress(e.target.value)}
+    className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white"
+  />
+</div>
+<button onClick={viewWallet}
+  className="mt-3 bg-gray-800 text-white font-semibold px-5 py-3 rounded-xl"
+>
+  View Wallet
+</button>
           <p className="mt-4 text-sm">
   {chainId === "0xdef1"
     ? "🟢 Connected to Ink"
@@ -292,6 +413,7 @@ setShowHedgePreview(true);
   ≈ ${(totalPortfolioValueEth * ethUsdPrice).toFixed(2)}
 </span>
 </p>
+
  <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
   <div className="p-4 bg-gray-900 rounded-xl">
   <div className="flex items-center justify-between mb-3">
@@ -300,7 +422,17 @@ setShowHedgePreview(true);
   ${totalTokenValue}
 </p>
   </div>
+<div className="grid grid-cols-[1fr_auto_auto] items-center gap-4 py-2 border-b border-gray-800">
+  <p className="text-white font-semibold">ETH</p>
 
+  <p className="text-gray-300 text-sm text-right">
+    {Number(ethBalance || 0).toFixed(6)}
+  </p>
+
+  <p className="text-white text-sm font-semibold text-right min-w-[64px]">
+    ${(Number(ethBalance || 0) * ethUsdPrice).toFixed(2)}
+  </p>
+</div>
   {tokens.slice(0, 4).map((token: any, index: number) => (
   <div
     key={index}
@@ -355,7 +487,7 @@ const bValue = getNftFloorPrice(b);
   .map((nft: any, index: number) => (
     <div key={index} className="grid grid-cols-[1fr_auto_auto] items-center gap-4 py-2 border-b border-gray-800 last:border-b-0">
       <p className="text-white font-semibold">
-        {nft.name || nft.metadata?.name || "Unnamed NFT"}
+       {getNftCollectionName(nft)}
       </p>
       <p className="text-gray-300 text-sm text-right">
   1
@@ -396,7 +528,7 @@ const bValue = getNftFloorPrice(b);
   ))}
 </div>
 <div className="mt-6 p-4 bg-gray-900 rounded-xl">
-<p className="text-xl font-bold tracking-wide mb-3">INK SHIELD</p>
+<p className="text-xl font-bold tracking-wide mb-3">Inkboard</p>
 <p className="text-2xl font-bold mb-1">{riskScore}<span className="text-sm text-gray-400">/100 Risk Score</span></p>
  <p className="text-white">Risk Level: <span className="text-orange-400 font-semibold">{riskLevel}</span></p>
 <p className="mt-3 text-lg font-semibold">Suggested Hedge: <span className="text-green-400">${suggestedHedge || "0.00"} BTC LONG</span></p>
