@@ -419,11 +419,11 @@ const openNadoHedge = () => {
 </p>
 
  <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-  <div className="p-4 bg-gray-900 rounded-xl">
+<div className="p-4 bg-gray-900 rounded-xl">
   <div className="flex items-center justify-between mb-3">
     <p className="text-xl font-bold tracking-wide">Tokens</p>
   <p className="text-lg font-bold text-white">
-  ${totalTokenValue}
+${totalTokensUsd.toFixed(2)}
 </p>
   </div>
 <div className="grid grid-cols-[1fr_auto_auto] items-center gap-4 py-2 border-b border-gray-800">
